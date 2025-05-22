@@ -113,24 +113,52 @@ class LitUnet(pl.LightningModule):
     @property
     def signature(self):
         return self._signature
-        
-    def validation_step(self, batch: torch.Tensor, img_name: str) -> UnetSignature:
-        images = batch["image"]
-        labels = batch.get("label", None)  # Check if "label" is provided in the batch
     
+    def perform_inference(self, images: torch.Tensor, img_name: str) -> str:
+        """Perform inference on the given images and save the output.
+    
+        Parameters
+        ----------
+        images : torch.Tensor
+            The input images for inference.
+        img_name : str
+            The name of the image to use for saving the output.
+    
+        Returns
+        -------
+        str
+            The path to the saved output file.
+        """
+        outputs = sliding_window_inference(
+            images, roi_size=self.patch_size, sw_batch_size=4, predictor=self.model
+        )
+        output_path = f"{self.save_dir}/output_{img_name}.nii.gz"
+        torch.save(outputs, output_path)
+        return output_path
+    
+    def validation_step(self, batch: torch.Tensor, batch_idx: int) -> UnetSignature:
+        """Validation step to compute evaluation metrics.
+    
+        Parameters
+        ----------
+        batch : torch.Tensor
+            The input batch containing images and labels.
+        batch_idx : int
+            The index of the batch.
+    
+        Returns
+        -------
+        UnetSignature
+            A dictionary containing evaluation metrics.
+        """
+        images = batch["image"]
+        labels = batch["label"]  # Assume labels are always provided by the DataLoader
+    
+        # Perform inference
         outputs = sliding_window_inference(
             images, roi_size=self.patch_size, sw_batch_size=4, predictor=self.model
         )
     
-        # Save the output image with monai
-        output_path = f"{self.save_dir}/output_{img_name}.nii.gz"
-    
-        if labels is not None:
-            dice = self.dice_score(outputs, labels)
-            results = {
-                "dice_avg": dice.item(),
-            }
-            return results
-        else:
-            # If no labels are provided, return an empty dictionary or a placeholder
-            return {"message": f"Inference completed and saved to {output_path}"}
+        # Compute evaluation metrics
+        dice = self.dice_score(outputs, labels)
+        return {"dice_avg": dice.item()}

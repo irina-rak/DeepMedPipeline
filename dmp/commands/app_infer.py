@@ -7,7 +7,7 @@ from omegaconf import OmegaConf
 from pydantic import ValidationError
 
 from dmp.console import console
-from dmp.modules.inference_module import ConfigInference
+from dmp.modules.inference_module import ConfigInference, InferenceModule
 from dmp.ml.registry import datamodule_registry, model_registry
 
 
@@ -17,9 +17,11 @@ def check_and_build_client_config(config: dict) -> tuple[dict, dict, dict]:
     console.log(_conf)
 
     conf       = dict(_conf)
+    conf_paths = conf["paths"]
+    conf_fabric = conf["fabric"]
     conf_data  = dict(conf["data"].config)
     conf_model = dict(conf["model"].config)
-    return conf, conf_data, conf_model
+    return conf, conf_paths, conf_fabric, conf_data, conf_model
 
 app = typer.Typer(pretty_exceptions_show_locals=False, rich_markup_mode="rich")
 
@@ -37,9 +39,7 @@ def client():
 @app.command(name="check")
 def check_client_config(
     config:        Annotated[ Path, typer.Argument()],
-    cid:           Annotated[ int,  typer.Option(rich_help_panel="Overriding some parameters") ] = None,
     root_dir:      Annotated[ str,  typer.Option(rich_help_panel="Overriding some parameters") ] = None,
-    server_adress: Annotated[ str,  typer.Option(rich_help_panel="Overriding some parameters") ] = None,
 ) -> None:
     """Check the provided client configuration file.
 
@@ -54,7 +54,7 @@ def check_client_config(
     config : Path
         the Path to the configuration file.
     num_rounds : int, optional
-        the number of round of Federated Learning, by default None
+        the number of round of Federated Learnconf_fabricing, by default None
     server_adress : str, optional
         the server adress and port, by default None
     to_onnx : bool, optional
@@ -83,12 +83,8 @@ def check_client_config(
         print("The config doesn't exist")
         raise typer.Abort()
 
-    if cid is not None:
-        conf_loaded["cid"] = cid
     if root_dir is not None:
         conf_loaded["root_dir"] = root_dir
-    if server_adress is not None:
-        conf_loaded["server_adress"] = server_adress
     try:
         _ = check_and_build_client_config(conf_loaded)
         console.log("This is a valid config!")
@@ -96,30 +92,15 @@ def check_client_config(
         console.log("This is not a valid config!")
         raise e
 
-# defines the "launch" command in Typer app
-@app.command(name="launch")
-def launch_config(
-    config:        Annotated[ Path, typer.Argument()],
-    cid:           Annotated[ int,  typer.Option(rich_help_panel="Overriding some parameters") ] = None,
-    root_dir:      Annotated[ str,  typer.Option(rich_help_panel="Overriding some parameters") ] = None,
-    server_adress: Annotated[ str,  typer.Option(rich_help_panel="Overriding some parameters") ] = None,
+
+@app.command(name="infer")
+def run_inference(
+    config: Annotated[Path, typer.Argument()],
+    root_dir: Annotated[str, typer.Option(rich_help_panel="Overriding some parameters")] = None,
+    output_dir: Annotated[str, typer.Option(rich_help_panel="Directory to save inference results")] = None,
+    mode: Annotated[str, typer.Option(rich_help_panel="Mode: validation or inference")] = "validation",
 ) -> None:
-    """Launch a FlowerClient.
-
-    This is a Typer command to launch a Flower Client, using the configuration given by config.
-
-    Parameters
-    ----------
-    config: Path
-        path to a config file
-    cid: int, optional
-        the client id
-    root_dir: str, optional
-        the path to a "root" directory, relatively to which can be found Data, Experiments and other useful directories
-    server_adress: str, optional
-        the server adress and port
-    """
-
+    """Run inference or validation using the provided configuration."""
     if config is None:
         print("No config file")
         raise typer.Abort()
@@ -132,23 +113,69 @@ def launch_config(
         print("The config doesn't exist")
         raise typer.Abort()
 
-    if cid is not None:
-        conf_loaded["cid"] = cid
     if root_dir is not None:
         conf_loaded["root_dir"] = root_dir
-    if server_adress is not None:
-        conf_loaded["server_adress"] = server_adress
-    # console.log(f"Conf specified: {dict(conf)}")
 
-    conf, conf_data, conf_model = check_and_build_client_config(config=conf_loaded)
+    # Parse configuration
+    conf, conf_paths, conf_data, conf_model = check_and_build_client_config(config=conf_loaded)
 
+    # Determine the output directory
+    config_output_dir = conf_paths.get("output_dir", "./outputs")
+    final_output_dir = output_dir if output_dir else config_output_dir
+
+    # Ensure the output directory exists
+    output_path = Path(final_output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Load the model from the specified path
+    model_path = conf_paths.get("model_path")
+    if not model_path:
+        console.log("Model path is not specified in the configuration!")
+        raise typer.Abort()
+    model_path = Path(model_path)
+    if not model_path.exists():
+        console.log(f"Model file does not exist at {model_path}")
+        raise typer.Abort()
+
+    # Initialize data module and model
     data = datamodule_registry[conf["data"].name](**conf_data)
-    data.setup(stage="fit")
-    num_examples = {
-        "testset": len(data.test_dataloader()),
-    }
-
+    data.setup(stage="test")
     net = model_registry[conf["model"].name](**conf_model)
+
+    # Load model weights
+    console.log(f"Loading model weights from {model_path}...")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    net.load_state_dict(torch.load(model_path, map_location=device))
+
+    # Prepare the InferenceModule
+    num_examples = {"testset": len(data.test_dataloader())}
+    conf_fabric = conf.get("fabric", {"accelerator": "auto", "devices": "auto"})
+    inference_module = InferenceModule(
+        model=net,
+        data=data,
+        num_examples=num_examples,
+        conf_fabric=ConfigInference(**conf_fabric),
+    )
+
+    # Initialize and run inference or validation
+    console.log("Initializing inference module...")
+    inference_module.initialize()
+
+    console.log(f"Starting {mode}...")
+    results = inference_module.run(mode=mode)
+
+    # Log results
+    console.log(f"{mode.capitalize()} results:")
+    for key, value in results.items():
+        console.log(f"{key}: {value}")
+
+    # Save results to a file
+    results_file = output_path / f"{mode}_results.json"
+    with open(results_file, "w") as f:
+        import json
+        json.dump(results, f, indent=4)
+    console.log(f"Results saved to {results_file}")
+    
 
 
 if __name__ == "__main__":
