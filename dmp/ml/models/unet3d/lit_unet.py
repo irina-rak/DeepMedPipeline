@@ -32,7 +32,6 @@ class ConfigUnet(BaseModel):
     strides: list[int]
     num_res_units: int
     norm: str = "BATCH"
-    lr: float
 
     model_config = ConfigDict(extra="forbid")
 
