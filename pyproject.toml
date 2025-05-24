@@ -1,0 +1,27 @@
+[project]
+name = "dmp"
+version = "0.1.0"
+description = "A flexible repository for model inference and results visualization in medical imaging deep learning workflows."
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Irina RAKOTOARISEDY" }
+]
+
+requires-python = ">=3.11"
+dependencies = [
+    "monai>=1.4.0",
+    "omegaconf>=2.3.0",
+    "pydantic>=2.11.5",
+    "lightning>=2.5.1.post0",
+    "rich>=14.0.0",
+    "torch>=2.7.0",
+    "typer>=0.15.4",
+]
+
+packages = [
+    {include = "dmp"}
+]
+
+[tool.poetry.scripts]
+dmp_app = "dmp.main:app"

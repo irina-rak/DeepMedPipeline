@@ -5,7 +5,7 @@ from pathlib import Path
 from monai.data import CacheDataset, Dataset
 from monai.transforms import Compose
 
-from src.console import console
+from dmp.console import console
 
 
 

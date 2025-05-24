@@ -1,6 +1,6 @@
 import torch
 from rich.progress import track
-from src.console import console
+from dmp.console import console
 
 
 

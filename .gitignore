@@ -180,4 +180,4 @@ cython_debug/
 *.ckpt
 
 # Datasets
-/data/
+/datasets/

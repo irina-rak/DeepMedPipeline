@@ -8,7 +8,7 @@ from monai.metrics import DiceHelper
 from monai.networks.nets import UNet
 from pydantic import BaseModel, ConfigDict
 
-from src.console import console
+from dmp.console import console
 
 
 

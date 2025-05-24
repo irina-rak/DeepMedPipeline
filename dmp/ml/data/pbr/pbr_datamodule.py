@@ -127,7 +127,6 @@ class ConfigPBR(BaseModel):
     batch_size: int = 1
     shape_img: List = [96, 96, 96]
     augment: bool = False
-    preprocessed: bool = True
     cache_rate: float = 1.0
     num_workers: int = 0
 

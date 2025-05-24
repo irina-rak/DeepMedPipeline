@@ -1,7 +1,6 @@
 from collections import OrderedDict
 from typing import Union, Optional
 
-import torch
 from lightning.fabric import Fabric
 from lightning.pytorch import LightningDataModule, LightningModule
 from pydantic import BaseModel, ConfigDict, Field
@@ -39,8 +38,6 @@ class ConfigInference(BaseModel):
     ----------
     root_dir: str
         the path to a "root" directory, relatively to which can be found Data, Experiments and other useful directories
-    data_dir: str
-        the path to the data directory, relatively to which can be found Data, Experiments and other useful directories
     model: dict
         a dictionnary holding all necessary keywords for the LightningModule used
     data: dict
@@ -48,7 +45,16 @@ class ConfigInference(BaseModel):
     """
 
     root_dir: str
-    data_dir: str
+    mode: Optional[str] = "inference"
+    paths: Optional[dict[str, str]] = Field(
+        default_factory=lambda: OrderedDict(
+            {
+                "output_dir": "./outputs",
+                "model_path": "./model.pth",
+            }
+        )
+    )
+    fabric: ConfigFabric
     model: Union[ConfigModel_UNet] = Field(discriminator="name")
     data: Union[ConfigData_PBR] = Field(discriminator="name")
 

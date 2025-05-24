@@ -93,7 +93,7 @@ def check_client_config(
         raise e
 
 
-@app.command(name="infer")
+@app.command(name="launch")
 def run_inference(
     config: Annotated[Path, typer.Argument()],
     root_dir: Annotated[str, typer.Option(rich_help_panel="Overriding some parameters")] = None,
@@ -117,7 +117,7 @@ def run_inference(
         conf_loaded["root_dir"] = root_dir
 
     # Parse configuration
-    conf, conf_paths, conf_data, conf_model = check_and_build_client_config(config=conf_loaded)
+    conf, conf_paths, conf_fabric, conf_data, conf_model = check_and_build_client_config(config=conf_loaded)
 
     # Determine the output directory
     config_output_dir = conf_paths.get("output_dir", "./outputs")

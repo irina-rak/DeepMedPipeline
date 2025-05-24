@@ -1,6 +1,4 @@
 import typer
-from trogon import Trogon
-from typer.main import get_group
 
 import dmp.commands.app_infer as infer
 
@@ -10,11 +8,6 @@ app = typer.Typer(
     rich_markup_mode="rich",
 )
 app.add_typer(infer.app, name="infer", help="Inference commands")
-
-
-@app.command()
-def tui(ctx: typer.Context):
-    Trogon(get_group(app), click_context=ctx).run()
 
 
 @app.callback()

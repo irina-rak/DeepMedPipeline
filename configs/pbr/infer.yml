@@ -5,16 +5,18 @@ mode: inference  # Mode of operation (e.g., inference, evaluation)
 
 # Paths
 paths:
-  model_path: /path/to/model  # Path to the pre-trained model
+  # model_path: /path/to/model  # Path to the pre-trained model
+  model_path: ${root_dir}/models/AUTO_IHU_INT_100_rounds_1_epoch.pt
   output_dir: ${root_dir}/results/  # Directory to save inference results
 
 # Data configuration
 data:
   name: pbr
-  batch_size: 4
-  num_workers: 4 # Number of workers for data loading
   config:
-    dir_test: /path/to/test/data  # Directory containing test data
+    # dir_test: /path/to/test/data  # Directory containing test data
+    dir_test: ${root_dir}/datasets/ProstateRectum_Bladder/Federated/INT/holdout
+    batch_size: 4
+    num_workers: 4 # Number of workers for data loading
 
 # Model configuration
 model:
