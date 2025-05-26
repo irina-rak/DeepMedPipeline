@@ -179,5 +179,7 @@ cython_debug/
 *.pkl
 *.ckpt
 
-# Datasets
+# Datasets, models, and results
 /datasets/
+/models/
+/results/

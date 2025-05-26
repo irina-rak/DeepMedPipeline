@@ -3,6 +3,13 @@ from typing import Literal, TypedDict
 import lightning.pytorch as pl
 import torch
 
+from monai.data import NibabelWriter
+from monai.transforms import (
+    AsDiscrete,
+    Compose,
+    EnsureType,
+    KeepLargestConnectedComponent,
+)
 from monai.inferers import sliding_window_inference
 from monai.metrics import DiceHelper
 from monai.networks.nets import UNet
@@ -32,6 +39,8 @@ class ConfigUnet(BaseModel):
     strides: list[int]
     num_res_units: int
     norm: str = "BATCH"
+    patch_size: list[int] = [96, 96, 96]
+    save_dir: str = "outputs"
 
     model_config = ConfigDict(extra="forbid")
 
@@ -68,8 +77,18 @@ class UnetSignature(TypedDict, total=False):
 
     dice_avg: torch.Tensor
     message: str
-    
-    
+
+
+def get_postprocessing(label_dims: int = 4) -> tuple[Compose, Compose]:
+    post_pred = Compose(
+        [
+            EnsureType(),
+            AsDiscrete(argmax=True, to_onehot=label_dims),
+            KeepLargestConnectedComponent(is_onehot=True),
+        ]
+    )
+    post_label = Compose([EnsureType(),  AsDiscrete(to_onehot=label_dims)])
+    return post_pred, post_label
 
 
 class LitUnet(pl.LightningModule):
@@ -109,6 +128,8 @@ class LitUnet(pl.LightningModule):
         self._logging = _logging
         self._signature = UnetSignature
 
+        self._post_pred, self._post_label = get_postprocessing(label_dims=out_channels)
+
     @property
     def signature(self):
         return self._signature
@@ -128,11 +149,20 @@ class LitUnet(pl.LightningModule):
         str
             The path to the saved output file.
         """
-        outputs = sliding_window_inference(
-            images, roi_size=self.patch_size, sw_batch_size=4, predictor=self.model
-        )
-        output_path = f"{self.save_dir}/output_{img_name}.nii.gz"
-        torch.save(outputs, output_path)
+        with torch.no_grad():
+            outputs = sliding_window_inference(
+                images, roi_size=self.patch_size, sw_batch_size=4, predictor=self.model
+            )
+            outputs = torch.argmax(outputs, dim=1)
+
+        output_path = f"{self.save_dir}/output_{img_name[0]}"
+        
+        writer = NibabelWriter()
+        writer.set_data_array(outputs, channel_dim=0)
+        writer.set_metadata({"affine": images[0].affine, "original_affine": images[0].affine})
+        writer.write(f"{output_path}.nii.gz", verbose=True)
+        console.log(f"Output saved to {output_path}.nii.gz")
+
         return output_path
     
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> UnetSignature:

@@ -3,6 +3,7 @@ from typing import Annotated
 
 import torch
 import typer
+from lightning.fabric import Fabric
 from omegaconf import OmegaConf
 from pydantic import ValidationError
 
@@ -98,7 +99,6 @@ def run_inference(
     config: Annotated[Path, typer.Argument()],
     root_dir: Annotated[str, typer.Option(rich_help_panel="Overriding some parameters")] = None,
     output_dir: Annotated[str, typer.Option(rich_help_panel="Directory to save inference results")] = None,
-    mode: Annotated[str, typer.Option(rich_help_panel="Mode: validation or inference")] = "validation",
 ) -> None:
     """Run inference or validation using the provided configuration."""
     if config is None:
@@ -136,6 +136,10 @@ def run_inference(
     if not model_path.exists():
         console.log(f"Model file does not exist at {model_path}")
         raise typer.Abort()
+    
+    # Initialize Fabric
+    fabric = Fabric(**dict(conf_fabric))
+    fabric.launch()
 
     # Initialize data module and model
     data = datamodule_registry[conf["data"].name](**conf_data)
@@ -144,23 +148,31 @@ def run_inference(
 
     # Load model weights
     console.log(f"Loading model weights from {model_path}...")
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    net.load_state_dict(torch.load(model_path, map_location=device))
+    # device = "cuda" if torch.cuda.is_available() else "cpu"
+    # net.load_state_dict(torch.load(model_path, map_location=device))
+    state = fabric.load(model_path)["model"]
+    net.load_state_dict(state, strict=True)
 
     # Prepare the InferenceModule
     num_examples = {"testset": len(data.test_dataloader())}
     conf_fabric = conf.get("fabric", {"accelerator": "auto", "devices": "auto"})
     inference_module = InferenceModule(
+        fabric=fabric,
         model=net,
         data=data,
         num_examples=num_examples,
-        conf_fabric=ConfigInference(**conf_fabric),
+        # conf_fabric=ConfigInference(**conf_fabric),
     )
 
     # Initialize and run inference or validation
     console.log("Initializing inference module...")
     inference_module.initialize()
 
+    mode = conf.get("mode", "inference").lower()
+    if mode not in ["inference", "validation"]:
+        console.log(f"Invalid mode: {mode}. Choose either 'inference' or 'validation'.")
+        raise typer.Abort()
+    
     console.log(f"Starting {mode}...")
     results = inference_module.run(mode=mode)
 

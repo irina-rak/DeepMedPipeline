@@ -66,10 +66,10 @@ class InferenceModule:
 
     def __init__(
         self,
+        fabric: Fabric,
         model: LightningModule,
         data: LightningDataModule,
         num_examples: dict[str, int],
-        conf_fabric: ConfigFabric,
     ) -> None:
         """Initialize the InferenceModule.
 
@@ -87,7 +87,7 @@ class InferenceModule:
         self.model = model
         self.data = data
         self.num_examples = num_examples
-        self.fabric = Fabric(**dict(conf_fabric))
+        self.fabric = fabric
 
     def initialize(self):
         """Initialize the Fabric module and set up the model and dataloaders."""
@@ -113,16 +113,17 @@ class InferenceModule:
 
         if mode == "validation":
             # Perform validation using the test_loop
-            results = test_loop(self.fabric, self.model, self._test_dataloader)
+            results = test_loop(self.model, self._test_dataloader)
             for key, val in results.items():
                 metrics[key] = val
         elif mode == "inference":
             # Perform inference
             for batch_idx, batch in enumerate(self._test_dataloader):
                 images = batch["image"]
-                outputs = self.model.perform_inference(images)
+                names = batch["name"]
+                outputs = self.model.perform_inference(images, names)
                 # Save or process outputs as needed
-                metrics[f"batch_{batch_idx}_outputs"] = outputs.cpu().numpy()
+                metrics[f"batch_{batch_idx}_outputs"] = outputs
                 console.log(f"Inference completed for batch {batch_idx}")
 
         return metrics

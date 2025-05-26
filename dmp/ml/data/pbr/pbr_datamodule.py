@@ -3,7 +3,7 @@ from typing import Literal, List, Optional
 import torch
 import lightning.pytorch as pl
 
-from monai.data import DataLoader
+from monai.data import DataLoader, NibabelReader
 from monai.transforms import (
     Compose,
     LoadImaged,
@@ -44,7 +44,7 @@ def get_transforms(
     """
     # Common preprocessing
     common_preprocessing = [
-        LoadImaged(keys=["image", "label"]),
+        LoadImaged(keys=["image", "label"], reader=NibabelReader()),
         EnsureChannelFirstd(keys=["image", "label"]),
         ScaleIntensityRanged(
             keys=["image"],
@@ -178,6 +178,9 @@ class LitPBRDataModule(pl.LightningDataModule):
         )
 
     def setup(self, stage: Optional[str] = None):
+        if self.cache_rate == 0.0:
+            console.print("[red]Cache rate is set to 0.0, no caching will be performed.[/red]")
+            
         if stage == "fit" or stage is None:
             self.data_train = CTCacheDataset(
                 data_dir=self.data_dir_train,
