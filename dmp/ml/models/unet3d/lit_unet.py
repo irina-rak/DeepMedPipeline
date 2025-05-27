@@ -3,7 +3,7 @@ from typing import Literal, TypedDict
 import lightning.pytorch as pl
 import torch
 
-from monai.data import NibabelWriter
+from monai.data import decollate_batch, NibabelWriter
 from monai.transforms import (
     AsDiscrete,
     Compose,
@@ -83,8 +83,8 @@ def get_postprocessing(label_dims: int = 4) -> tuple[Compose, Compose]:
     post_pred = Compose(
         [
             EnsureType(),
-            AsDiscrete(argmax=True, to_onehot=label_dims),
-            KeepLargestConnectedComponent(is_onehot=True),
+            AsDiscrete(argmax=True),
+            KeepLargestConnectedComponent(),
         ]
     )
     post_label = Compose([EnsureType(),  AsDiscrete(to_onehot=label_dims)])
@@ -134,36 +134,79 @@ class LitUnet(pl.LightningModule):
     def signature(self):
         return self._signature
     
-    def perform_inference(self, images: torch.Tensor, img_name: str) -> str:
+    # def perform_inference(self, images: torch.Tensor, img_name: str) -> str:
+    #     """Perform inference on the given images and save the output.
+    
+    #     Parameters
+    #     ----------
+    #     images : torch.Tensor
+    #         The input images for inference.
+    #     img_name : str
+    #         The name of the image to use for saving the output.
+    
+    #     Returns
+    #     -------
+    #     str
+    #         The path to the saved output file.
+    #     """
+    #     with torch.no_grad():
+    #         outputs = sliding_window_inference(
+    #             images, roi_size=self.patch_size, sw_batch_size=4, predictor=self.model
+    #         )
+    #         outputs = [self._post_pred(output) for output in decollate_batch(outputs)][0]
+
+    #     output_path = f"{self.save_dir}/output_{img_name[0]}"
+        
+    #     writer = NibabelWriter()
+    #     writer.set_data_array(outputs, channel_dim=0)
+    #     writer.set_metadata({"affine": images[0].affine, "original_affine": images[0].affine})
+    #     writer.write(f"{output_path}.nii.gz", verbose=False)
+
+    #     return output_path
+
+    def perform_inference(self, images: torch.Tensor, img_names: list[str]) -> list[str]:
         """Perform inference on the given images and save the output.
     
         Parameters
         ----------
         images : torch.Tensor
-            The input images for inference.
-        img_name : str
-            The name of the image to use for saving the output.
+            The input images for inference (batch).
+        img_names : list[str]
+            The names of the images to use for saving the outputs.
     
         Returns
         -------
-        str
-            The path to the saved output file.
+        list[str]
+            The paths to the saved output files.
         """
-        with torch.no_grad():
-            outputs = sliding_window_inference(
-                images, roi_size=self.patch_size, sw_batch_size=4, predictor=self.model
-            )
-            outputs = torch.argmax(outputs, dim=1)
-
-        output_path = f"{self.save_dir}/output_{img_name[0]}"
+        output_paths = []
         
-        writer = NibabelWriter()
-        writer.set_data_array(outputs, channel_dim=0)
-        writer.set_metadata({"affine": images[0].affine, "original_affine": images[0].affine})
-        writer.write(f"{output_path}.nii.gz", verbose=True)
-        console.log(f"Output saved to {output_path}.nii.gz")
-
-        return output_path
+        with torch.no_grad():
+            # Process entire batch at once instead of per-image
+            batch_outputs = sliding_window_inference(
+                images,
+                roi_size=self.patch_size,
+                sw_batch_size=4,
+                predictor=self.model
+            )
+            
+            processed_outputs = [self._post_pred(output) for output in decollate_batch(batch_outputs)]
+            
+            writer = NibabelWriter()  # Reuse writer instance
+            
+            for i, (output, img_name) in enumerate(zip(processed_outputs, img_names)):
+                output_path = f"{self.save_dir}/output_{img_name}"
+                
+                writer.set_data_array(output, channel_dim=0)
+                
+                if hasattr(images[i], 'affine') and images[i].affine is not None:
+                    affine_data = images[i].affine
+                    writer.set_metadata({"affine": affine_data, "original_affine": affine_data})
+                
+                writer.write(f"{output_path}.nii.gz", verbose=False)
+                output_paths.append(output_path)
+        
+        return output_paths
     
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> UnetSignature:
         """Validation step to compute evaluation metrics.

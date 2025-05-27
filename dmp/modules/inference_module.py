@@ -4,6 +4,7 @@ from typing import Union, Optional
 from lightning.fabric import Fabric
 from lightning.pytorch import LightningDataModule, LightningModule
 from pydantic import BaseModel, ConfigDict, Field
+from rich.progress import Progress
 
 from dmp.console import console
 from dmp.ml.loops_fabric import test_loop
@@ -116,14 +117,31 @@ class InferenceModule:
             results = test_loop(self.model, self._test_dataloader)
             for key, val in results.items():
                 metrics[key] = val
+
         elif mode == "inference":
-            # Perform inference
-            for batch_idx, batch in enumerate(self._test_dataloader):
-                images = batch["image"]
-                names = batch["name"]
-                outputs = self.model.perform_inference(images, names)
-                # Save or process outputs as needed
-                metrics[f"batch_{batch_idx}_outputs"] = outputs
-                console.log(f"Inference completed for batch {batch_idx}")
+            with Progress() as progress:
+                task = progress.add_task("Running inference...", total=len(self._test_dataloader))
+                outputs_list = []
+                
+                for batch_idx, batch in enumerate(self._test_dataloader):
+                    images = batch["image"]
+                    names = batch["name"]
+                    
+                    # progress.update(task, description=f"Processing {names[0]}", advance=1)
+                    
+                    outputs = self.model.perform_inference(images, names)
+                    outputs_list.append({
+                        "batch_idx": batch_idx,
+                        "names": names,
+                        "outputs": outputs
+                    })
+
+                    progress.advance(task)
+                progress.update(task, completed=len(self._test_dataloader))
+                
+                metrics["inference_outputs"] = outputs_list
+
+        else:
+            raise ValueError(f"Unsupported mode: {mode}. Use 'validation' or 'inference'.")
 
         return metrics

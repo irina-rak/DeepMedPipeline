@@ -7,6 +7,7 @@ from monai.data import DataLoader, NibabelReader
 from monai.transforms import (
     Compose,
     LoadImaged,
+    # ResizeWithPadOrCropd,
     EnsureChannelFirstd,
     ScaleIntensityRanged,
     CropForegroundd,
@@ -27,6 +28,7 @@ from dmp.ml.data.pbr.pbr_dataset import CTCacheDataset
 
 
 def get_transforms(
+        # shape: tuple[int, int, int] = (500, 500, 250),
         patch_size: tuple[int, int, int] = (96, 96, 96),
         pixdim: tuple[float, float, float] = (1.0, 1.0, 2.0),
         margin: int = 25,
@@ -46,6 +48,12 @@ def get_transforms(
     common_preprocessing = [
         LoadImaged(keys=["image", "label"], reader=NibabelReader()),
         EnsureChannelFirstd(keys=["image", "label"]),
+        # ResizeWithPadOrCropd(
+        #     keys=["image", "label"],
+        #     spatial_size=shape,
+        #     # mode=("bilinear", "nearest"),
+        #     mode=("constant", "constant"),
+        # ),
         ScaleIntensityRanged(
             keys=["image"],
             a_min=-250,

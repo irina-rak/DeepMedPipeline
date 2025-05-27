@@ -15,9 +15,9 @@ data:
   config:
     # dir_test: /path/to/test/data  # Directory containing test data
     dir_test: ${root_dir}/datasets/ProstateRectum_Bladder/Federated/INT/holdout
-    batch_size: 1
+    batch_size: 1 # Always use 1 for inference due to multiple sizes
     num_workers: 4 # Number of workers for data loading
-    cache_rate: 0.0
+    cache_rate: 1.0
 
 # Model configuration
 model:
