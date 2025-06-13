@@ -97,7 +97,6 @@ class ConfigPBR(BaseModel):
     cache_rate: float = 1.0
     num_workers: int = 0
     margin: int = 45
-    mode: Literal["inference", "validation"] = "inference"
 
     model_config = ConfigDict(extra="forbid")
 
