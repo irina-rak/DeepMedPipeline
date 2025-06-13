@@ -1,24 +1,17 @@
 from typing import Literal, List, Optional
 
-import torch
 import lightning.pytorch as pl
 
 from monai.data import DataLoader, NibabelReader
 from monai.transforms import (
     Compose,
     LoadImaged,
-    # ResizeWithPadOrCropd,
     EnsureChannelFirstd,
     ScaleIntensityRanged,
     CropForegroundd,
     Orientationd,
     Spacingd,
-    RandCropByPosNegLabeld,
-    SpatialPadd,
-    RandFlipd,
     NormalizeIntensityd,
-    RandScaleIntensityd,
-    RandShiftIntensityd,
 )
 from torch.utils.data._utils.collate import default_collate
 from pydantic import BaseModel, ConfigDict
@@ -31,7 +24,8 @@ def get_transforms(
         # shape: tuple[int, int, int] = (500, 500, 250),
         patch_size: tuple[int, int, int] = (96, 96, 96),
         pixdim: tuple[float, float, float] = (1.0, 1.0, 2.0),
-        margin: int = 25,
+        margin: int = 45,
+        keys: List[str] = ["image", "label"],
 ):
     """Get the transforms for training and validation. The training transforms
     include intensity normalization, patches extraction using RandGridPatchd, and data augmentation.
@@ -44,16 +38,9 @@ def get_transforms(
     Returns:
         tuple[Compose, Compose]: The training and validation transforms.
     """
-    # Common preprocessing
-    common_preprocessing = [
-        LoadImaged(keys=["image", "label"], reader=NibabelReader()),
-        EnsureChannelFirstd(keys=["image", "label"]),
-        # ResizeWithPadOrCropd(
-        #     keys=["image", "label"],
-        #     spatial_size=shape,
-        #     # mode=("bilinear", "nearest"),
-        #     mode=("constant", "constant"),
-        # ),
+    transforms = Compose([
+        LoadImaged(keys=keys, reader=NibabelReader()),
+        EnsureChannelFirstd(keys=keys),
         ScaleIntensityRanged(
             keys=["image"],
             a_min=-250,
@@ -62,46 +49,18 @@ def get_transforms(
             b_max=1.0,
             clip=True,
         ),
-        CropForegroundd(keys=["image", "label"], source_key="image", margin=margin),
-        Orientationd(keys=["image", "label"], axcodes="RAS"),
-        Spacingd(keys=["image", "label"], pixdim=pixdim, mode=("bilinear", "nearest")),
-        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=False)
-    ]
+        # CropForegroundd(keys=keys, source_key="image", margin=margin),
+        # Orientationd(keys=keys, axcodes="RAS"),
+        # Spacingd(keys=keys, pixdim=pixdim, mode=("bilinear", "nearest")),
+        # NormalizeIntensityd(keys="image", nonzero=True, channel_wise=False)
+        Orientationd(keys=keys, axcodes="RAS"),
+        Spacingd(keys=keys, pixdim=pixdim, mode=("bilinear", "nearest")),
+        # CropForegroundd(keys=keys, source_key="image", margin=margin),
+        CropForegroundd(keys=keys, source_key="label", allow_smaller=True, margin=margin),
+        NormalizeIntensityd(keys="image", nonzero=True, channel_wise=False),
+    ])
 
-    # Training-specific transforms
-    train_transforms = Compose(
-        common_preprocessing
-        + [
-            RandCropByPosNegLabeld(
-                keys=["image", "label"],
-                label_key="label",
-                spatial_size=(96, 96, 96),
-                pos=1,
-                neg=1,
-                num_samples=4,
-                image_key="image",
-                image_threshold=0,
-            ),
-            SpatialPadd(
-                keys=["image", "label"],
-                spatial_size=patch_size,
-                method="symmetric",
-                mode=("edge", "constant")
-            ),
-            RandFlipd(keys=["image", "label"], spatial_axis=[0], prob=0.5),
-            RandFlipd(keys=["image", "label"], spatial_axis=[1], prob=0.5),
-            RandFlipd(keys=["image", "label"], spatial_axis=[2], prob=0.5),
-            RandScaleIntensityd(keys=["image"], factors=0.1, prob=0.5),
-            RandShiftIntensityd(keys=["image"], offsets=0.1, prob=0.5),
-        ]
-    )
-
-    # Validation-specific transforms
-    val_transforms = Compose(
-        common_preprocessing
-    )
-
-    return train_transforms, val_transforms
+    return transforms
 
 
 class ConfigPBR(BaseModel):
@@ -170,6 +129,7 @@ class LitPBRDataModule(pl.LightningDataModule):
         augment: bool = False,
         cache_rate: float = 1.0,
         num_workers: int = 0,
+        mode: Literal["inference", "validation"] = "inference",
     ):
         super().__init__()
         self.data_dir_train = dir_train
@@ -179,93 +139,40 @@ class LitPBRDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.augment = augment
         self.cache_rate = cache_rate
+        self.mode = mode
 
-        self.train_transforms, self.val_transforms = get_transforms(
+        self.transforms = get_transforms(
             patch_size=shape_img,
             pixdim=(1.0, 1.0, 2.0),
+            keys=["image", "label"] if mode == "validation" else ["image"],
         )
 
     def setup(self, stage: Optional[str] = None):
         if self.cache_rate == 0.0:
             console.print("[red]Cache rate is set to 0.0, no caching will be performed.[/red]")
-            
-        if stage == "fit" or stage is None:
-            self.data_train = CTCacheDataset(
-                data_dir=self.data_dir_train,
-                transforms=self.train_transforms,
-                cache_rate=self.cache_rate,
-                num_workers=self.num_workers,
-            ).get_dataset()
-            self.data_val = CTCacheDataset(
-                data_dir=self.data_dir_val,
-                transforms=self.val_transforms,
-                cache_rate=self.cache_rate,
-                num_workers=self.num_workers,
-            ).get_dataset()
 
         if stage == "test" or stage is None:
             self.data_test = CTCacheDataset(
                 data_dir=self.data_dir_test,
-                transforms=self.val_transforms,
+                transforms=self.transforms,
                 cache_rate=self.cache_rate,
                 num_workers=self.num_workers,
+                mode=self.mode,
             ).get_dataset()
 
-    def collate_fn(self, batch):
-        """Custom collate function to handle the batch of data.
-
-        Args:
-            batch (list): A list of dictionaries containing the data.
-
-        Returns:
-            dict: A dictionary containing the collated data.
-        """
-        return {
-            "image": torch.stack([item["image"] for item in batch]),
-            "label": torch.stack([item["label"] for item in batch]),
-        }
-    
-    def list_data_collate(self, batch):
-        """
-        Enhancement for PyTorch DataLoader default collate.
-        If dataset already returns a list of batch data that generated in transforms, need to merge all data to 1 list.
-        Then it's same as the default collate behavior.
-        Note:
-            Need to use this collate if apply some transforms that can generate batch data.
-        """
-        elem = batch[0]
-        data = torch.stack([i for k in batch for i in k] if isinstance(elem, list) else batch)
-        return default_collate(data)
+        else:
+            raise ValueError(f"Unsupported stage: {stage}. Supported stages are 'test' or None.")
 
     def train_dataloader(self):
-        return DataLoader(
-            self.data_train,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            # drop_last=True,
-            shuffle=True,
-            # collate_fn=self.collate_fn,
-            # collate_fn=self.list_data_collate,
-        )
+        pass
 
     def val_dataloader(self):
-        return DataLoader(
-            self.data_val,
-            batch_size=self.batch_size,
-            num_workers=self.num_workers,
-            # drop_last=True,
-            shuffle=False,
-            # collate_fn=self.collate_fn,
-            # collate_fn=self.list_data_collate,
-        )
+        pass
 
     def test_dataloader(self):
         return DataLoader(
             self.data_test,
             batch_size=self.batch_size,
             num_workers=self.num_workers,
-            # drop_last=True,
             shuffle=False,
-            # collate_fn=self.collate_fn,
-            # collate_fn=self.list_data_collate,
         )

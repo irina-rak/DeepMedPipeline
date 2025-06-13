@@ -142,7 +142,8 @@ def run_inference(
     fabric.launch()
 
     # Initialize data module and model
-    data = datamodule_registry[conf["data"].name](**conf_data)
+    mode = conf.get("mode", "inference").lower()
+    data = datamodule_registry[conf["data"].name](**conf_data, mode=mode)
     data.setup(stage="test")
     net = model_registry[conf["model"].name](**conf_model)
 
@@ -168,7 +169,6 @@ def run_inference(
     console.log("Initializing inference module...")
     inference_module.initialize()
 
-    mode = conf.get("mode", "inference").lower()
     if mode not in ["inference", "validation"]:
         console.log(f"Invalid mode: {mode}. Choose either 'inference' or 'validation'.")
         raise typer.Abort()
