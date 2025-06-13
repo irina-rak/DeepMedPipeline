@@ -183,3 +183,7 @@ cython_debug/
 /datasets/
 /models/
 /results/
+
+# Local configuration files (Personal or environment-specific)
+*_no_upload*
+*.ipynb*

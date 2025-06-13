@@ -11,7 +11,7 @@ from monai.transforms import (
     KeepLargestConnectedComponent,
 )
 from monai.inferers import sliding_window_inference
-from monai.metrics import DiceHelper
+from monai.metrics import DiceHelper, HausdorffDistanceMetric, SurfaceDistanceMetric
 from monai.networks.nets import UNet
 from pydantic import BaseModel, ConfigDict
 
@@ -71,11 +71,16 @@ class UnetSignature(TypedDict, total=False):
     ----------
     dice_avg: torch.Tensor (optional)
         Average Dice score, calculated if labels are provided.
+    hd_avg: torch.Tensor (optional)
+        Hausdorff distance metric, calculated if labels are provided.
+    sd_avg: torch.Tensor (optional)
+        Surface distance metric, calculated if labels are provided.
     message: str (optional)
         Message indicating inference completion, used when no labels are provided.
     """
 
     dice_avg: torch.Tensor
+    
     message: str
 
 
@@ -83,11 +88,12 @@ def get_postprocessing(label_dims: int = 4) -> tuple[Compose, Compose]:
     post_pred = Compose(
         [
             EnsureType(),
+            # AsDiscrete(argmax=True, to_onehot=4),
             AsDiscrete(argmax=True),
-            KeepLargestConnectedComponent(),
+            KeepLargestConnectedComponent([0, 1, 2, 3], is_onehot=False),
         ]
     )
-    post_label = Compose([EnsureType(),  AsDiscrete(to_onehot=label_dims)])
+    post_label = Compose([EnsureType(),  AsDiscrete(argmax=True, to_onehot=label_dims)])
     return post_pred, post_label
 
 
@@ -116,6 +122,7 @@ class LitUnet(pl.LightningModule):
             num_res_units=num_res_units,
             norm=norm,
         )
+
         self.dice_score = DiceHelper(
             include_background=False,
             softmax=True,
@@ -123,6 +130,16 @@ class LitUnet(pl.LightningModule):
             get_not_nans=False,
             num_classes=out_channels,
         )
+        self.hausdorff_distance = HausdorffDistanceMetric(
+            include_background=False,
+            reduction="mean",
+            percentile=95.0,
+        )
+        self.surface_distance = SurfaceDistanceMetric(
+            include_background=False,
+            reduction="mean",
+        )
+
         self.patch_size = patch_size
         self.save_dir = save_dir
         self._logging = _logging
@@ -191,6 +208,7 @@ class LitUnet(pl.LightningModule):
             )
             
             processed_outputs = [self._post_pred(output) for output in decollate_batch(batch_outputs)]
+            processed_outputs = torch.stack(processed_outputs, dim=0)  # Stack outputs
             
             writer = NibabelWriter()  # Reuse writer instance
             
@@ -206,7 +224,7 @@ class LitUnet(pl.LightningModule):
                 writer.write(f"{output_path}.nii.gz", verbose=False)
                 output_paths.append(output_path)
         
-        return output_paths
+        return output_paths, processed_outputs
     
     def validation_step(self, batch: torch.Tensor, batch_idx: int) -> UnetSignature:
         """Validation step to compute evaluation metrics.
@@ -233,4 +251,28 @@ class LitUnet(pl.LightningModule):
     
         # Compute evaluation metrics
         dice = self.dice_score(outputs, labels)
-        return {"dice_avg": dice.item()}
+        hd = self.hausdorff_distance(outputs, labels)
+        sd = self.surface_distance(outputs, labels)
+        
+        return {"dice_avg": dice.item(), "hausdorff_distance": hd.item(), "surface_distance": sd.item()}
+    
+    def compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor) -> UnetSignature:
+        """Compute evaluation metrics from the model outputs and labels.
+    
+        Parameters
+        ----------
+        outputs : torch.Tensor
+            The model outputs.
+        labels : torch.Tensor
+            The ground truth labels.
+    
+        Returns
+        -------
+        UnetSignature
+            A dictionary containing evaluation metrics.
+        """
+        dice = self.dice_score(outputs, labels)
+        hd = self.hausdorff_distance(outputs, labels)
+        sd = self.surface_distance(outputs, labels)
+        
+        return {"dice_avg": dice.item(), "hd_avg": hd.item(), "sd_avg": sd.item()}

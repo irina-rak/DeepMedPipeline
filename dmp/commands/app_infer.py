@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, OrderedDict
 
 import torch
 import typer
@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from dmp.console import console
 from dmp.modules.inference_module import ConfigInference, InferenceModule
+from dmp.modules.utils import compute_average_scores
 from dmp.ml.registry import datamodule_registry, model_registry
 
 
@@ -141,8 +142,18 @@ def run_inference(
     fabric = Fabric(**dict(conf_fabric))
     fabric.launch()
 
+    mode = conf.get("mode", "inference").lower()
+
+    if mode not in ["inference", "validation"]:
+        console.log(f"Invalid mode: {mode}. Choose either 'inference' or 'validation'.")
+        raise typer.Abort()
+
+    # Initialize and run inference or validation
+    console.log(f"Starting {mode}...")
+    console.log("Initializing inference module...")
+
     # Initialize data module and model
-    data = datamodule_registry[conf["data"].name](**conf_data)
+    data = datamodule_registry[conf["data"].name](**conf_data, mode=mode)
     data.setup(stage="test")
     net = model_registry[conf["model"].name](**conf_model)
 
@@ -150,7 +161,7 @@ def run_inference(
     console.log(f"Loading model weights from {model_path}...")
     # device = "cuda" if torch.cuda.is_available() else "cpu"
     # net.load_state_dict(torch.load(model_path, map_location=device))
-    state = fabric.load(model_path)["model"]
+    state = fabric.load(model_path)["state_dict"]
     net.load_state_dict(state, strict=True)
 
     # Prepare the InferenceModule
@@ -163,18 +174,12 @@ def run_inference(
         num_examples=num_examples,
         # conf_fabric=ConfigInference(**conf_fabric),
     )
-
-    # Initialize and run inference or validation
-    console.log("Initializing inference module...")
     inference_module.initialize()
-
-    mode = conf.get("mode", "inference").lower()
-    if mode not in ["inference", "validation"]:
-        console.log(f"Invalid mode: {mode}. Choose either 'inference' or 'validation'.")
-        raise typer.Abort()
     
-    console.log(f"Starting {mode}...")
     results = inference_module.run(mode=mode)
+    # TO DO: Compute average results here if available
+    if mode == "validation":
+        results["average_scores"] = OrderedDict(compute_average_scores(results))
 
     # Log results
     console.log(f"{mode.capitalize()} results:")

@@ -1,6 +1,7 @@
 from glob import glob
 from os import path, listdir
 from pathlib import Path
+from typing import Literal
 
 from monai.data import CacheDataset, Dataset
 from monai.transforms import Compose
@@ -16,11 +17,13 @@ class CTCacheDataset:
         cache_rate: float = 1.0,
         num_workers: int = 4,
         transforms: Compose = None,
+        mode: Literal["inference", "validation"] = "inference",
     ):
         self.data_dir = Path(data_dir)
         self.cache_rate = cache_rate
         self.num_workers = num_workers
         self.transforms = transforms
+        self.mode = mode
 
         # Prepare data list
         self.data = self.create_data_list()
@@ -45,44 +48,38 @@ class CTCacheDataset:
         return len(self.dataset)
 
     def create_data_list(self):
-        # image_files = sorted(glob(str(self.data_dir / "CT" / "image.nii.gz")))
-        # label_files = sorted(glob(str(self.data_dir / "Labels" / "combined_labels.nii.gz")))
         cases = listdir(str(self.data_dir))
-        # image_files = [path.join(case, "CT", "image.nii.gz") for case in cases]
-        # label_files = [path.join(case, "Labels", "combined_labels.nii.gz") for case in cases]
-
-        # image_dict = {}
-        # label_dict = {}
-        # for case in cases:
-        #     image_path = str(self.data_dir / case / "CT" / "image.nii.gz")
-        #     label_path = str(self.data_dir / case / "Labels" / "combined_labels.nii.gz")
-        #     if path.exists(image_path):
-        #         image_dict[case] = image_path
-        #     if path.exists(label_path):
-        #         label_dict[case] = label_path
-
-        images = []
-        labels = []
-        names = []
+        data = []
         for case in cases:
             image_path = str(self.data_dir / case / "CT" / "image.nii.gz")
             label_path = str(self.data_dir / case / "Labels" / "combined_labels.nii.gz")
             if path.exists(image_path):
-                images.append(image_path)
-                names.append(case)
-            if path.exists(label_path):
-                labels.append(label_path)
-
-        # data = []
-        # for filename in image_dict:
-        #     if filename in label_dict:
-        #         data.append({"image": image_dict[filename], "label": label_dict[filename]})
-        #     else:
-        #         print(f"Warning: no label found for {filename}")
-
-        # data = [{"image": image_name, "label": label_name} for image_name, label_name in zip(images, labels)]
-        data = [{"image": image_name, "label": label_name, "name": name} for image_name, label_name, name in zip(images, labels, names)]
+                entry = {"image": image_path, "name": case}
+                if path.exists(label_path) and self.mode == "validation":
+                    entry["label"] = label_path
+                data.append(entry)
         return data
+    
+    # def create_data_list(self):
+    #     cases = listdir(str(self.data_dir))
+
+    #     images = []
+    #     labels = []
+    #     names = []
+    #     for case in cases:
+    #         image_path = str(self.data_dir / case / "CT" / "image.nii.gz")
+    #         label_path = str(self.data_dir / case / "Labels" / "combined_labels.nii.gz")
+    #         if path.exists(image_path):
+    #             images.append(image_path)
+    #             names.append(case)
+    #         if path.exists(label_path):
+    #             labels.append(label_path)
+                
+    #     if len(labels) == 0:
+    #         data = [{"image": image_name, "name": name} for image_name, name in zip(images, names)]
+    #     else:
+    #         data = [{"image": image_name, "label": label_name, "name": name} for image_name, label_name, name in zip(images, labels, names)]
+    #     return data
 
     def get_dataset(self):
         return self.dataset
