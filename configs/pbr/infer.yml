@@ -16,6 +16,7 @@ data:
     batch_size: 1 # Always use 1 for inference due to multiple sizes
     num_workers: 8 # Number of workers for data loading
     cache_rate: 0.0
+    margin: 45 # Margin for cropping the input data
 
 # Model configuration
 model:

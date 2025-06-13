@@ -96,6 +96,8 @@ class ConfigPBR(BaseModel):
     augment: bool = False
     cache_rate: float = 1.0
     num_workers: int = 0
+    margin: int = 45
+    mode: Literal["inference", "validation"] = "inference"
 
     model_config = ConfigDict(extra="forbid")
 
@@ -129,6 +131,7 @@ class LitPBRDataModule(pl.LightningDataModule):
         augment: bool = False,
         cache_rate: float = 1.0,
         num_workers: int = 0,
+        margin: int = 45,
         mode: Literal["inference", "validation"] = "inference",
     ):
         super().__init__()
@@ -144,6 +147,7 @@ class LitPBRDataModule(pl.LightningDataModule):
         self.transforms = get_transforms(
             patch_size=shape_img,
             pixdim=(1.0, 1.0, 2.0),
+            margin=margin,
             keys=["image", "label"] if mode == "validation" else ["image"],
         )
 

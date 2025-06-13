@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, OrderedDict
 
 import torch
 import typer
@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from dmp.console import console
 from dmp.modules.inference_module import ConfigInference, InferenceModule
+from dmp.modules.utils import compute_average_scores
 from dmp.ml.registry import datamodule_registry, model_registry
 
 
@@ -175,6 +176,9 @@ def run_inference(
     
     console.log(f"Starting {mode}...")
     results = inference_module.run(mode=mode)
+    # TO DO: Compute average results here if available
+    if mode == "validation":
+        results["average_scores"] = OrderedDict(compute_average_scores(results))
 
     # Log results
     console.log(f"{mode.capitalize()} results:")
