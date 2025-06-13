@@ -1,12 +1,11 @@
 # General configuration for inference using a pre-trained model
 
 root_dir: ${oc.env:PWD}
-mode: inference  # Mode of operation (e.g., inference, evaluation)
+mode: validation  # Mode of operation (e.g., inference, evaluation)
 
 # Paths
 paths:
-  # model_path: /path/to/model  # Path to the pre-trained model
-  model_path: ${root_dir}/models/AUTO_IHU_INT_100_rounds_1_epoch.pt
+  model_path: /path/to/model  # Path to the pre-trained model
   output_dir: ${root_dir}/results/  # Directory to save inference results
 
 # Data configuration
@@ -14,10 +13,9 @@ data:
   name: pbr
   config:
     # dir_test: /path/to/test/data  # Directory containing test data
-    dir_test: ${root_dir}/datasets/ProstateRectum_Bladder/Federated/INT/holdout
     batch_size: 1 # Always use 1 for inference due to multiple sizes
-    num_workers: 4 # Number of workers for data loading
-    cache_rate: 1.0
+    num_workers: 8 # Number of workers for data loading
+    cache_rate: 0.0
 
 # Model configuration
 model:
@@ -36,4 +34,5 @@ model:
 # Fabric configuration
 fabric:
   accelerator: gpu      # Type of accelerator to use (e.g., gpu, cpu, auto)
-  devices: auto         # Number of devices or "auto" to let Fabric decide
+  # devices: auto         # Number of devices or "auto" to let Fabric decide, # Multi-GPU is not supported yet due to Fabric implementation
+  devices: [0]
