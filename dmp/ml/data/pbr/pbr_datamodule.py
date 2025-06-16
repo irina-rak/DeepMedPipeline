@@ -21,7 +21,6 @@ from dmp.ml.data.pbr.pbr_dataset import CTCacheDataset
 
 
 def get_transforms(
-        # shape: tuple[int, int, int] = (500, 500, 250),
         patch_size: tuple[int, int, int] = (96, 96, 96),
         pixdim: tuple[float, float, float] = (1.0, 1.0, 2.0),
         margin: int = 45,
@@ -49,13 +48,8 @@ def get_transforms(
             b_max=1.0,
             clip=True,
         ),
-        # CropForegroundd(keys=keys, source_key="image", margin=margin),
-        # Orientationd(keys=keys, axcodes="RAS"),
-        # Spacingd(keys=keys, pixdim=pixdim, mode=("bilinear", "nearest")),
-        # NormalizeIntensityd(keys="image", nonzero=True, channel_wise=False)
         Orientationd(keys=keys, axcodes="RAS"),
         Spacingd(keys=keys, pixdim=pixdim, mode=("bilinear", "nearest")),
-        # CropForegroundd(keys=keys, source_key="image", margin=margin),
         CropForegroundd(keys=keys, source_key="label", allow_smaller=True, margin=margin),
         NormalizeIntensityd(keys="image", nonzero=True, channel_wise=False),
     ])

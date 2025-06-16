@@ -112,38 +112,6 @@ class InferenceModule:
         metrics = {}
         console.log(f"Running in {mode} mode...")
 
-        # if mode == "validation":
-        #     # Perform validation using the test_loop
-        #     results = test_loop(self.model, self._test_dataloader)
-        #     for key, val in results.items():
-        #         metrics[key] = val
-
-        # elif mode == "inference":
-        #     with Progress() as progress:
-        #         task = progress.add_task("Running inference...", total=len(self._test_dataloader))
-        #         outputs_list = []
-                
-        #         for batch_idx, batch in enumerate(self._test_dataloader):
-        #             images = batch["image"]
-        #             names = batch["name"]
-                    
-        #             # progress.update(task, description=f"Processing {names[0]}", advance=1)
-                    
-        #             outputs = self.model.perform_inference(images, names)
-        #             outputs_list.append({
-        #                 "batch_idx": batch_idx,
-        #                 "names": names,
-        #                 "outputs": outputs
-        #             })
-
-        #             progress.advance(task)
-        #         progress.update(task, completed=len(self._test_dataloader))
-                
-        #         metrics["inference_outputs"] = outputs_list
-
-        # else:
-        #     raise ValueError(f"Unsupported mode: {mode}. Use 'validation' or 'inference'.")
-
         if mode not in ["validation", "inference"]:
             raise ValueError(f"Unsupported mode: {mode}. Use 'validation' or 'inference'.")
 
@@ -154,10 +122,8 @@ class InferenceModule:
             for batch_idx, batch in enumerate(self._test_dataloader):
                 images = batch["image"]
                 # If labels are present, they can be used for validation metrics
-                labels = batch.get("label", None)  # Optional, not used in inference
+                labels = batch.get("label", None)
                 names = batch["name"]
-                
-                # progress.update(task, description=f"Processing {names[0]}", advance=1)
                 
                 paths, outputs = self.model.perform_inference(images, names)
                 outputs_list.append({
@@ -167,9 +133,7 @@ class InferenceModule:
                 })
 
                 if mode == "validation":
-                    # If in validation mode, compute metrics
                     results = self.model.compute_metrics(outputs, labels)
-
                     outputs_list[-1]["metrics"] = OrderedDict(results)
 
                 progress.advance(task)
