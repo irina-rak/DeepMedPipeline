@@ -45,7 +45,7 @@ class CTCacheDataset:
         return len(self.dataset)
 
     def create_data_list(self):
-        cases = listdir(str(self.data_dir))
+        cases = sorted(listdir(self.data_dir))
         data = []
         for case in cases:
             image_path = str(self.data_dir / case / "CT" / "image.nii.gz")

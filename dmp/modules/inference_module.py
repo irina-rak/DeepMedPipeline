@@ -124,6 +124,9 @@ class InferenceModule:
                 # If labels are present, they can be used for validation metrics
                 labels = batch.get("label", None)
                 names = batch["name"]
+
+                # Set patient name in task description
+                progress.update(task, description=f"Running inference... {names[0]}")
                 
                 paths, outputs = self.model.perform_inference(images, names)
                 outputs_list.append({
