@@ -149,36 +149,6 @@ class LitUnet(pl.LightningModule):
     @property
     def signature(self):
         return self._signature
-    
-    # def perform_inference(self, images: torch.Tensor, img_name: str) -> str:
-    #     """Perform inference on the given images and save the output.
-    
-    #     Parameters
-    #     ----------
-    #     images : torch.Tensor
-    #         The input images for inference.
-    #     img_name : str
-    #         The name of the image to use for saving the output.
-    
-    #     Returns
-    #     -------
-    #     str
-    #         The path to the saved output file.
-    #     """
-    #     with torch.no_grad():
-    #         outputs = sliding_window_inference(
-    #             images, roi_size=self.patch_size, sw_batch_size=4, predictor=self.model
-    #         )
-    #         outputs = [self._post_pred(output) for output in decollate_batch(outputs)][0]
-
-    #     output_path = f"{self.save_dir}/output_{img_name[0]}"
-        
-    #     writer = NibabelWriter()
-    #     writer.set_data_array(outputs, channel_dim=0)
-    #     writer.set_metadata({"affine": images[0].affine, "original_affine": images[0].affine})
-    #     writer.write(f"{output_path}.nii.gz", verbose=False)
-
-    #     return output_path
 
     def perform_inference(self, images: torch.Tensor, img_names: list[str]) -> list[str]:
         """Perform inference on the given images and save the output.

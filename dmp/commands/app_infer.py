@@ -159,18 +159,11 @@ def run_inference(
 
     # Load model weights
     console.log(f"Loading model weights from {model_path}...")
-<<<<<<< Updated upstream
-    # device = "cuda" if torch.cuda.is_available() else "cpu"
-    # net.load_state_dict(torch.load(model_path, map_location=device))
-    state = fabric.load(model_path)["state_dict"]
-=======
-    # state = fabric.load(model_path)["state_dict"]
     try:
         state = fabric.load(model_path)["state_dict"]
     except KeyError:
         console.log(f"Model file {model_path} does not contain 'state_dict'. Trying to load 'model'.")
         state = fabric.load(model_path)["model"]
->>>>>>> Stashed changes
     net.load_state_dict(state, strict=True)
 
     # Prepare the InferenceModule
@@ -185,8 +178,8 @@ def run_inference(
     )
     inference_module.initialize()
     
+    # TO DO: Update results calculation to include per-class metrics
     results = inference_module.run(mode=mode)
-    # TO DO: Compute average results here if available
     if mode == "validation":
         results["average_scores"] = OrderedDict(compute_average_scores(results))
 
