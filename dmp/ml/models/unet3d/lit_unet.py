@@ -277,15 +277,26 @@ class LitUnet(pl.LightningModule):
 
         dice = self.dice_score(outputs, labels).tolist()[0]
         dice_avg = torch.tensor(dice).mean().item()
+
+        # One-hot encode the outputs and labels for Hausdorff and Surface distance calculations
+        outputs = torch.nn.functional.one_hot(outputs[0].long(), num_classes=self.hparams.out_channels).permute(0, 4, 1, 2, 3).float()
+        labels = torch.nn.functional.one_hot(labels[0].long(), num_classes=self.hparams.out_channels).permute(0, 4, 1, 2, 3).float()
+
         hd = self.hausdorff_distance(outputs, labels).tolist()[0]
+        hd_avg = torch.tensor(hd).mean().item()
         sd = self.surface_distance(outputs, labels).tolist()[0]
+        sd_avg = torch.tensor(sd).mean().item()
 
         # Match the output to the label_names
         dice = {label_names[i]: dice[i] for i in range(len(dice))}
+        hd = {label_names[i]: hd[i] for i in range(len(hd))}
+        sd = {label_names[i]: sd[i] for i in range(len(sd))}
         dice["dice_avg"] = dice_avg
+        hd["hd_avg"] = hd_avg
+        sd["sd_avg"] = sd_avg
         
         return {
             "dice": dice,
-            "hd_avg": hd,
-            "sd_avg": sd,
+            "hd": hd,
+            "sd": sd,
         }

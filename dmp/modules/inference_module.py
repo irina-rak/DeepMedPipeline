@@ -156,6 +156,9 @@ class InferenceModule:
                 # If labels are present, they can be used for validation metrics
                 labels = batch.get("label", None)  # Optional, not used in inference
                 names = batch["name"]
+
+                # Set patient name in task description
+                progress.update(task, description=f"Running inference... {names[0]}")
                 
                 # progress.update(task, description=f"Processing {names[0]}", advance=1)
                 
