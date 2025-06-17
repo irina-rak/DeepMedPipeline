@@ -88,7 +88,6 @@ def get_postprocessing(label_dims: int = 4) -> tuple[Compose, Compose]:
     post_pred = Compose(
         [
             EnsureType(),
-            # AsDiscrete(argmax=True, to_onehot=4),
             AsDiscrete(argmax=True),
             KeepLargestConnectedComponent([0, 1, 2, 3], is_onehot=False),
         ]
@@ -126,18 +125,18 @@ class LitUnet(pl.LightningModule):
         self.dice_score = DiceHelper(
             include_background=False,
             softmax=True,
-            reduction="mean",
+            reduction="none",  # Use None to return per-class scores
             get_not_nans=False,
             num_classes=out_channels,
         )
         self.hausdorff_distance = HausdorffDistanceMetric(
             include_background=False,
-            reduction="mean",
-            percentile=95.0,
+            reduction="none",  # Use None to return per-class scores
+            percentile=95.0, # 95th percentile for Hausdorff distance
         )
         self.surface_distance = SurfaceDistanceMetric(
             include_background=False,
-            reduction="mean",
+            reduction="none",
         )
 
         self.patch_size = patch_size
@@ -169,7 +168,6 @@ class LitUnet(pl.LightningModule):
         output_paths = []
         
         with torch.no_grad():
-            # Process entire batch at once instead of per-image
             batch_outputs = sliding_window_inference(
                 images,
                 roi_size=self.patch_size,
@@ -177,10 +175,10 @@ class LitUnet(pl.LightningModule):
                 predictor=self.model
             )
             
-            processed_outputs = [self._post_pred(output) for output in decollate_batch(batch_outputs)]
-            processed_outputs = torch.stack(processed_outputs, dim=0)  # Stack outputs
+            processed_outputs = [self._post_pred(output) for output in decollate_batch(batch_outputs)] # 4, H, W, D
+            processed_outputs = torch.stack(processed_outputs, dim=0)  # Stack outputs into a batch: B, 1, H, W, D
             
-            writer = NibabelWriter()  # Reuse writer instance
+            writer = NibabelWriter()
             
             for i, (output, img_name) in enumerate(zip(processed_outputs, img_names)):
                 output_path = f"{self.save_dir}/output_{img_name}"
@@ -241,8 +239,23 @@ class LitUnet(pl.LightningModule):
         UnetSignature
             A dictionary containing evaluation metrics.
         """
-        dice = self.dice_score(outputs, labels)
-        hd = self.hausdorff_distance(outputs, labels)
-        sd = self.surface_distance(outputs, labels)
+        label_names = {
+            0: "Prostate",
+            1: "Bladder",
+            2: "Rectum",
+        }
+
+        dice = self.dice_score(outputs, labels).tolist()[0]
+        dice_avg = torch.tensor(dice).mean().item()
+        hd = self.hausdorff_distance(outputs, labels).tolist()[0]
+        sd = self.surface_distance(outputs, labels).tolist()[0]
+
+        # Match the output to the label_names
+        dice = {label_names[i]: dice[i] for i in range(len(dice))}
+        dice["dice_avg"] = dice_avg
         
-        return {"dice_avg": dice.item(), "hd_avg": hd.item(), "sd_avg": sd.item()}
+        return {
+            "dice": dice,
+            "hd_avg": hd,
+            "sd_avg": sd,
+        }

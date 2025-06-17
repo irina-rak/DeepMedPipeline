@@ -159,7 +159,11 @@ def run_inference(
 
     # Load model weights
     console.log(f"Loading model weights from {model_path}...")
-    state = fabric.load(model_path)["state_dict"]
+    try:
+        state = fabric.load(model_path)["state_dict"]
+    except KeyError:
+        console.log(f"Model file {model_path} does not contain 'state_dict'. Trying to load 'model'.")
+        state = fabric.load(model_path)["model"]
     net.load_state_dict(state, strict=True)
 
     # Prepare the InferenceModule
