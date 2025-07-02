@@ -48,12 +48,15 @@ class CTCacheDataset:
         cases = sorted(listdir(self.data_dir))
         data = []
         for case in cases:
-            image_path = str(self.data_dir / case / "CT" / "image.nii.gz")
-            label_path = str(self.data_dir / case / "Labels" / "combined_labels.nii.gz")
-            if path.exists(image_path):
+            image_pattern = str(self.data_dir / case / "CT" / "*.nii.gz")
+            image_path = glob(image_pattern)[0] # Take the first match
+            label_pattern = str(self.data_dir / case / "Labels" / "*combined_labels.nii.gz")
+            label_files = glob(label_pattern)[0] # Take the first match
+            
+            if path.exists(image_path) and path.exists(label_files):
                 entry = {"image": image_path, "name": case}
-                if path.exists(label_path) and self.mode == "validation":
-                    entry["label"] = label_path
+                if label_files and self.mode == "validation":
+                    entry["label"] = label_files
                 data.append(entry)
         return data
 

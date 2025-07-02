@@ -179,7 +179,7 @@ def run_inference(
     inference_module.initialize()
     
     # TO DO: Update results calculation to include per-class metrics
-    results = inference_module.run(mode=mode)
+    results = inference_module.run(mode=mode, spacing=tuple(conf_data.get("spacing", (1.0, 1.0, 2.0))))
     if mode == "validation":
         results["average_scores"] = OrderedDict(compute_average_scores(results))
 

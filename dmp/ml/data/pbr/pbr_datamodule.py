@@ -91,6 +91,7 @@ class ConfigPBR(BaseModel):
     cache_rate: float = 1.0
     num_workers: int = 0
     margin: int = 45
+    spacing: tuple[float, float, float] = (1.0, 1.0, 2.0)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -125,6 +126,7 @@ class LitPBRDataModule(pl.LightningDataModule):
         cache_rate: float = 1.0,
         num_workers: int = 0,
         margin: int = 45,
+        spacing: tuple[float, float, float] = (1.0, 1.0, 2.0),
         mode: Literal["inference", "validation"] = "inference",
     ):
         super().__init__()

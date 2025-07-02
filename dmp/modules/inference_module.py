@@ -96,7 +96,7 @@ class InferenceModule:
         self.model = self.fabric.setup(self.model)
         self._test_dataloader = self.fabric.setup_dataloaders(self.data.test_dataloader())
 
-    def run(self, mode: str = "validation") -> dict:
+    def run(self, mode: str = "validation", spacing: tuple[float, float, float] = (1.0, 1.0, 2.0)) -> dict:
         """Run the model in either validation or inference mode.
 
         Parameters
@@ -136,7 +136,7 @@ class InferenceModule:
                 })
 
                 if mode == "validation":
-                    results = self.model.compute_metrics(outputs, labels)
+                    results = self.model.compute_metrics(outputs, labels, spacing=spacing)
                     outputs_list[-1]["metrics"] = OrderedDict(results)
 
                 progress.advance(task)

@@ -69,17 +69,19 @@ class UnetSignature(TypedDict, total=False):
 
     Attributes
     ----------
-    dice_avg: torch.Tensor (optional)
+    dice: torch.Tensor (optional)
         Average Dice score, calculated if labels are provided.
-    hd_avg: torch.Tensor (optional)
+    hd: torch.Tensor (optional)
         Hausdorff distance metric, calculated if labels are provided.
-    sd_avg: torch.Tensor (optional)
+    sd: torch.Tensor (optional)
         Surface distance metric, calculated if labels are provided.
     message: str (optional)
         Message indicating inference completion, used when no labels are provided.
     """
 
-    dice_avg: torch.Tensor
+    dice: torch.Tensor | None
+    hd: torch.Tensor | None
+    sd: torch.Tensor | None
     
     message: str
 
@@ -224,7 +226,7 @@ class LitUnet(pl.LightningModule):
         
         return {"dice_avg": dice.item(), "hausdorff_distance": hd.item(), "surface_distance": sd.item()}
     
-    def compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor) -> UnetSignature:
+    def compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor, spacing: tuple[float, float, float] = (1.0, 1.0, 2.0)) -> UnetSignature:
         """Compute evaluation metrics from the model outputs and labels.
     
         Parameters
@@ -252,9 +254,9 @@ class LitUnet(pl.LightningModule):
         outputs = torch.nn.functional.one_hot(outputs[0].long(), num_classes=self.hparams.out_channels).permute(0, 4, 1, 2, 3).float()
         labels = torch.nn.functional.one_hot(labels[0].long(), num_classes=self.hparams.out_channels).permute(0, 4, 1, 2, 3).float()
 
-        hd = self.hausdorff_distance(outputs, labels).tolist()[0]
+        hd = self.hausdorff_distance(outputs, labels, spacing=spacing).tolist()[0]
         hd_avg = torch.tensor(hd).mean().item()
-        sd = self.surface_distance(outputs, labels).tolist()[0]
+        sd = self.surface_distance(outputs, labels, spacing=spacing).tolist()[0]
         sd_avg = torch.tensor(sd).mean().item()
 
         # Match the output to the label_names
