@@ -45,7 +45,7 @@ class CTCacheDataset:
         return len(self.dataset)
 
     def create_data_list(self):
-        cases = sorted(listdir(self.data_dir))
+        cases = sorted(case for case in listdir(self.data_dir) if not case.startswith('.'))
         data = []
         for case in cases:
             image_pattern = str(self.data_dir / case / "CT" / "*.nii.gz")
